@@ -46,6 +46,33 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+var _backgroundJobClient = app.Services
+    .CreateScope()
+    .ServiceProvider
+    .GetService<IBackgroundJobClient>();
+
+var _recurringJobManager = app.Services
+    .CreateScope()
+    .ServiceProvider
+    .GetService<IRecurringJobManager>();
+
+var _jobTestService = app.Services
+    .CreateScope()
+    .ServiceProvider
+    .GetService<IJobTestService>();
+
+if (_jobTestService is not null)
+{
+    _backgroundJobClient?.Enqueue(() => _jobTestService.FireAndForgetJob());
+    _backgroundJobClient?.Schedule(() => _jobTestService.DelayedJob(), TimeSpan.FromSeconds(20));
+    _recurringJobManager?.AddOrUpdate("jobId2", () => _jobTestService.ReccuringJob(), Cron.Minutely);
+
+
+    // Job para ser executado após a execução de outro job
+    var parentJobId = _backgroundJobClient.Enqueue(() => _jobTestService.FireAndForgetJob());
+    _backgroundJobClient?.ContinueJobWith(parentJobId, () => _jobTestService.ContinuationJob());
+}
+
 app.UseAuthorization();
 app.MapControllers();
 app.UseHangfireDashboard();
